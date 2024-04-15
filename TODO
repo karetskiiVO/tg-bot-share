@@ -1,8 +1,7 @@
-1. Rework command system(with lambda)
-2. Create deployment system
-3. Implement editor distance to similar
-4. Create clear documentation and readme
-5. Work with bottomns
-6. Try to implement template package
-7. Try to create dialog graph
-8. Impliment authoristion system(whitch can remember about users)
+1. Create deployment system
+2. Implement editor distance to similar
+3. Create clear documentation and readme
+4. Work with bottomns
+5. Try to implement template package
+6. Try to create dialog graph
+7. Impliment authoristion system(whitch can remember about users)

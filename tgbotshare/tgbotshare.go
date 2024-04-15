@@ -23,7 +23,7 @@ func (bot *TGbot) init() *TGbot {
 	bot.authorisedUsers = make(map[string]struct{})
 	bot.allowedCards = make(map[string]string)
 
-	var buf struct {
+	var buf []struct {
 		Shop     string `json:"shopname"`
 		CardPath string `json:"cardpath"`
 	}
@@ -42,7 +42,9 @@ func (bot *TGbot) init() *TGbot {
 			panic(err)
 		}
 
-		bot.allowedCards[buf.Shop] = buf.CardPath
+		for _, elem := range buf {
+			bot.allowedCards[elem.Shop] = elem.CardPath
+		}
 	}
 
 	return bot
@@ -64,29 +66,40 @@ func (bot *TGbot) Run() {
 	u.Timeout = 60
 	updates := bot.tgApi.GetUpdatesChan(u)
 
-	for update := range updates {
-		if update.Message == nil {
-			continue
-		}
-		log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
-
-		if reflect.TypeOf(update.Message.Text).Kind() == reflect.String && update.Message.Text != "" {
-			switch update.Message.Text {
-			case "/start":
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID,
+	var commands map[string]struct{
+		handler     func(update tgbotapi.Update) tgbotapi.MessageConfig
+		description string
+	}
+	commands = map[string]struct {
+		handler     func(update tgbotapi.Update) tgbotapi.MessageConfig
+		description string
+	}{
+		"/start": {
+			handler: func(update tgbotapi.Update) tgbotapi.MessageConfig {
+				return tgbotapi.NewMessage(update.Message.Chat.ID,
 					"Этот бот создан для cardshare, для получения карты, "+
 						"которая есть в наличии просто напиши название магазина.\n"+
 						"Для повторения этого сообщения напиши /start\n"+
 						"Для ознокомления с полным списком команд /help")
-				bot.tgApi.Send(msg)
-			case "/help":
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID,
-					"Вот список актуальных команд:\n"+
-						"\t/start - сообщение начала работы\n"+
-						"\t/help  - cписок команд\n"+
-						"\t/data  - информация о текущих картах в доступе\n")
-				bot.tgApi.Send(msg)
-			case "/data":
+			},
+			description: "вывод страртового сообщения"},
+		"/help": {
+			handler: func(update tgbotapi.Update) tgbotapi.MessageConfig {
+				var msgTextbilder strings.Builder
+				msgTextbilder.WriteString("На данный момент доступны:\n")
+				for command, val := range commands {
+					msgTextbilder.WriteString("\t")
+					msgTextbilder.WriteString(command)
+					msgTextbilder.WriteString(" - ")
+					msgTextbilder.WriteString(val.description)
+					msgTextbilder.WriteString("\n")
+				}
+
+				return tgbotapi.NewMessage(update.Message.Chat.ID, msgTextbilder.String())
+			},
+			description: "вывод текущего списока команд"},
+		"/data": {
+			handler: func(update tgbotapi.Update) tgbotapi.MessageConfig {
 				var msgTextbilder strings.Builder
 				msgTextbilder.WriteString("На данный момент доступны:\n")
 				for shopname := range bot.allowedCards {
@@ -94,16 +107,28 @@ func (bot *TGbot) Run() {
 					msgTextbilder.WriteString(shopname)
 					msgTextbilder.WriteString("\n")
 				}
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgTextbilder.String())
-				bot.tgApi.Send(msg)
-			default:
+				return tgbotapi.NewMessage(update.Message.Chat.ID, msgTextbilder.String())
+			},
+			description: "вывод текущего списока магазинов"},
+	}
+
+	for update := range updates {
+		if update.Message == nil {
+			continue
+		}
+		log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
+
+		if reflect.TypeOf(update.Message.Text).Kind() == reflect.String && update.Message.Text != "" {
+			if val, ok := commands[update.Message.Text]; ok {
+				bot.tgApi.Send(val.handler(update))
+			} else {
 				photoname, ok := bot.allowedCards[update.Message.Text]
 
 				if !ok {
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID,
 						"На данный момент магазин "+update.Message.Text+" отсутствует, но мы скоро это исправим(;")
 					bot.tgApi.Send(msg)
-					break
+					continue
 				}
 
 				photo, err := os.ReadFile(bot.databasePath + "/" + photoname)
@@ -111,11 +136,10 @@ func (bot *TGbot) Run() {
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID,
 						"что-то пошло не так...(мы уже разбираемся)")
 					bot.tgApi.Send(msg)
-					break
+					continue
 				}
 
 				bot.tgApi.Send(tgbotapi.NewPhoto(update.Message.Chat.ID, tgbotapi.FileBytes{Name: "picture", Bytes: photo}))
-
 			}
 		}
 	}
