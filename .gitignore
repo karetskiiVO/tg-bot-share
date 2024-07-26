@@ -15,8 +15,9 @@
 # vendor/
 
 # Go workspace file
-go.work
+*.work
 *.env
 
 *.bat
 database
+data
