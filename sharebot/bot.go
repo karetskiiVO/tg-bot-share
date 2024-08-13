@@ -12,6 +12,8 @@ type Bot struct {
 
 	maxinlineheight int
 	maxinlinewidth  int
+
+	userTable UserTable
 }
 
 func NewBot(botContext Context) Bot {
@@ -26,12 +28,32 @@ func NewBot(botContext Context) Bot {
 		db:              &botContext.DataBase,
 		maxinlineheight: 1,
 		maxinlinewidth:  1,
+		userTable:       NewUserTable(),
 	}
 }
 
 func (bot *Bot) SetInlineKeyboardSize(height, width int) {
 	bot.maxinlineheight = height
 	bot.maxinlinewidth = width
+}
+
+func updateLoger(update tgbotapi.Update) {
+	if update.Message != nil {
+		log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
+	} else if update.CallbackQuery != nil {
+		log.Printf("[%s] %s", update.CallbackQuery.From.UserName, update.CallbackQuery.Data)
+	}
+}
+
+func getUsername(update tgbotapi.Update) string {
+	if update.Message != nil {
+		return update.Message.From.UserName
+	} else if update.CallbackQuery != nil {
+		return update.CallbackQuery.From.UserName
+	} else {
+		log.Panic("getUsername() went wrong")
+		panic("getUsername() went wrong")
+	}
 }
 
 func (bot *Bot) Run() {
@@ -42,16 +64,11 @@ func (bot *Bot) Run() {
 	updates := bot.tgApi.GetUpdatesChan(u)
 
 	for update := range updates {
-		var handler func(bot *Bot, update tgbotapi.Update) request
-		if update.Message != nil {
-			log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
-			handler = getNewMessageHandler(update)
-		} else if update.CallbackQuery != nil {
-			log.Printf("[%s] %s", update.CallbackQuery.From.UserName, update.CallbackQuery.Data)
-			handler = getCallbckQueryHandler(update)
-		}
-
-		res := handler(bot, update)
-		res.send()
+		session := bot.userTable.GetSession(getUsername(update))
+	
+		updateLoger(update)
+		
+		handler := session.GetHandler(update) // методы для session
+		handler.handle(bot, update).send()
 	}
 }

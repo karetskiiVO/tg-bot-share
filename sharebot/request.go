@@ -35,7 +35,7 @@ func (sndReq sendRequest) send() {
 
 type keyboardUpdateRequest struct {
 	replyMarkup tgbotapi.EditMessageReplyMarkupConfig
-	api      *tgbotapi.BotAPI
+	api         *tgbotapi.BotAPI
 }
 
 func (kbdUpdReq keyboardUpdateRequest) send() {
